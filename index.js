@@ -478,18 +478,21 @@ function updateTradeObject(base, quote, trade){
 
   total_trade_object[base].push({
     t : timestamp,
-    v : volume_krw
+    v : volume_krw,
+    p : trade_price
   })
 
   if(ask_bid =="ASK"){
     ask_trade_object[base].push({
       t : timestamp,
-      v : volume_krw
+      v : volume_krw,
+      p : trade_price
     })
   }else{
     bid_trade_object[base].push({
       t : timestamp,
-      v : volume_krw
+      v : volume_krw,
+      p : trade_price
     })
   
   }
@@ -513,27 +516,64 @@ function updateTradeObject(base, quote, trade){
   // })
 
   let total_result = total_trade_object[base].reduce((acc, value)=>{
-    let { v } = value;
+    let { v , p } = value;
     acc.total_volume +=v;
-    return acc;
+    return acc
   },{
-    total_volume : 0
+    total_volume : 0,
+   
   })
 
   let bid_result = bid_trade_object[base].reduce((acc, value)=>{
-    let { v } = value;
+    let { v , p} = value;
     acc.total_volume +=v;
+
+    if(acc.high ==null){
+      acc.high = p;
+    }else{
+      acc.high = Math.max(acc.high,p);
+    }
+
+    if(acc.low ==null){
+      acc.low = p;
+    }else{
+      acc.low = Math.min(acc.low,p);
+    }
+    
+    acc.change_rate = Math.abs(((acc.high - acc.low) / acc.low) * 100);
+
     return acc;
   },{
-    total_volume : 0
+    total_volume : 0,
+    high : null,
+    low : null,
+    change_rate : 0,
   })
 
   let ask_result = ask_trade_object[base].reduce((acc, value)=>{
-    let { v } = value;
+    let { v , p} = value;
     acc.total_volume +=v;
+
+    if(acc.high ==null){
+      acc.high = p;
+    }else{
+      acc.high = Math.max(acc.high,p);
+    }
+
+    if(acc.low ==null){
+      acc.low = p;
+    }else{
+      acc.low = Math.min(acc.low,p);
+    }
+    
+    acc.change_rate = Math.abs(((acc.high - acc.low) / acc.low) * 100);
+
     return acc;
   },{
-    total_volume : 0
+    total_volume : 0,
+    high : null,
+    low : null,
+    change_rate : 0,
   })
 
   // if(bid_result.total_volume  > EVENT_VOLUME){  // 1초만에 일정금액 한방에 긁음
@@ -554,15 +594,16 @@ function updateTradeObject(base, quote, trade){
     ask_trade_object[base] = [];
 
     if(bid_result.total_volume >1000000){ // 꼽싸리는 뺴기위해 100만원이상만
-      addEventLog(`${base.padEnd(6)} ${colors.red(formatNumber(bid_result.total_volume))}`,{
+      addEventLog(`${base.padEnd(6)} ${colors.red(formatNumber(bid_result.total_volume))}   ${colors.yellow(bid_result.change_rate>0?bid_result.change_rate.toFixed(2)+"%":'')}`,{
         base : base,
         type : "bid",
-        volume : bid_result.total_volume
+        volume : bid_result.total_volume,
+        change_rate : bid_result.change_rate
       })
     }
 
     if(ask_result.total_volume >1000000){ // 꼽싸리는 뺴기위해 100만원이상만
-      addEventLog(`${base.padEnd(6)} ${colors.blue(formatNumber(ask_result.total_volume))}`,{
+      addEventLog(`${base.padEnd(6)} ${colors.blue(formatNumber(ask_result.total_volume))}   ${colors.yellow(ask_result.change_rate>0?ask_result.change_rate.toFixed(2)+"%":'')}`,{
         base : base ,
         type : "ask",
         volume : ask_result.total_volume
@@ -932,12 +973,12 @@ async function startVolumeRanker() {
         });
 
         line_chart.setData([ {
-          title: 'Bid',
+          title: 'Buy',
           style: {line: 'red'},
           x: x,
           y: y1
         }, {
-          title: 'Ask',
+          title: 'Sell',
           style: {line: 'blue'},
           x: x,
           y: y2
@@ -980,20 +1021,6 @@ function setLineData(mockData, line) {
     mockData[i].y.push(num)  
   }
   line.setData(mockData)
-}
-
-var transactionsData = {
-  title: 'Buy',
-  style: {line: 'red'},
-  x: ['00:00', '00:05', '00:10', '00:15', '00:20', '00:30', '00:40', '00:50', '01:00', '01:10', '01:20', '01:30', '01:40', '01:50', '02:00', '02:10', '02:20', '02:30', '02:40', '02:50', '03:00', '03:10', '03:20', '03:30', '03:40', '03:50', '04:00', '04:10', '04:20', '04:30'],
-  y: [0, 20, 40, 45, 45, 50, 55, 70, 65, 58, 50, 55, 60, 65, 70, 80, 70, 50, 40, 50, 60, 70, 82, 88, 89, 89, 89, 80, 72, 70]
-}
-
-var transactionsData1 = {
-  title: 'Sell',
-  style: {line: 'blue'},
-  x: ['00:00', '00:05', '00:10', '00:15', '00:20', '00:30', '00:40', '00:50', '01:00', '01:10', '01:20', '01:30', '01:40', '01:50', '02:00', '02:10', '02:20', '02:30', '02:40', '02:50', '03:00', '03:10', '03:20', '03:30', '03:40', '03:50', '04:00', '04:10', '04:20', '04:30'],
-  y: [0, 5, 5, 10, 10, 15, 20, 30, 25, 30, 30, 20, 20, 30, 30, 20, 15, 15, 19, 25, 30, 25, 25, 20, 25, 30, 35, 35, 30, 30]
 }
 
 
@@ -1050,11 +1077,12 @@ function initUI(){
        label: 'Event'})
   //store_progress = grid.set(8, 9, 2, 3, contrib.gauge, {label: 'Collect Progress', percent: [0]})
 
-  line_chart = grid.set(6, 9, 4, 3, contrib.line, 
+  //line_chart = grid.set(6, 9, 4, 3, contrib.line, 
+  line_chart = grid.set(8, 6, 4, 3, contrib.line, 
     { 
      maxY: 125
     , label: 'Total Transactions'
-    , showLegend: true
+    , showLegend: false
     , showNthLabel : false
     , legend: {width:5}})
 
@@ -1067,7 +1095,7 @@ function initUI(){
   // bar_chart.hide();
     
 
-  buy_sell_progress = grid.set(10, 9, 2, 3, contrib.gauge, {label: 'Bid/Ask', stack : [{percent:0,stroke:'red'},{percent:0,stroke:'blue'}]})
+  buy_sell_progress = grid.set(10, 9, 2, 3, contrib.gauge, {label: 'Buy/Sell', stack : [{percent:0,stroke:'red'},{percent:0,stroke:'blue'}]})
 
 
   //y1, x1 , y2 ,x2
@@ -1302,11 +1330,6 @@ function updateEventLogs(){
 
   }
 
-  let btc_day_before_label = null;
-  if(btc_krw_daybefore){
-    btc_day_before_label = `${"BTC"} ${btc_krw_daybefore>0?colors.red(`▲ ${Math.abs(btc_krw_daybefore).toFixed(2)}%`):colors.blue(`▼ ${Math.abs(btc_krw_daybefore).toFixed(2)}%`)}`;
-  }
-  
   let bid_rank = getKeysSortedByValueDescending(bid);
   let ask_rank = getKeysSortedByValueDescending(ask);
 
@@ -1330,6 +1353,13 @@ function updateEventLogs(){
     //ask_label = colors.red(`${ask_rank[0]}, ${ask_rank[1]}`);
   }
 
+  
+  let btc_day_before_label = null;
+  if(btc_krw_daybefore){
+    btc_day_before_label = `${"BTC"} ${btc_krw_daybefore>0?colors.red(`▲ ${Math.abs(btc_krw_daybefore).toFixed(2)}%`):colors.blue(`▼ ${Math.abs(btc_krw_daybefore).toFixed(2)}%`)}`;
+  }
+
+
   let bid_ask_1st_base_label= `${bid_label?bid_label:'-'}/${ask_label?ask_label:'-'}`;
 
   event_log.setLabel(`[${btc_day_before_label?btc_day_before_label:''}] (${bid_ask_1st_base_label})`);
@@ -1338,7 +1368,7 @@ function updateEventLogs(){
 }
 
 function updateBuySell(buy, sell, total_volume){
-  buy_sell_progress.setLabel(`(Bid/Ask) ${formatNumber(total_volume)}`); 
+  buy_sell_progress.setLabel(`(Buy/Sell) ${formatNumber(total_volume)}`); 
   //buy_sell_progress.setData([buy, sell])
   buy_sell_progress.setStack([{percent:buy,stroke:'red'},{percent:sell,stroke:'blue'}])
 }
@@ -1382,7 +1412,7 @@ function updateTable(table_data){
   let progress = ((Date.now() - start_time)/ (collection_time_ *60000)) * 100
   data_table.setLabel(` ${collection_time_}-Min Upbit Volume List ${getTime(Date.now())}, Progress: ${progress<100?progress.toFixed(2):100}%`)
   data_table.setData({
-    headers: ['Idx', 'Base', 'Quote','ChgRate','Price','High','Low','(Bid:Ask)',`Volume`,`${collection_time_}min(%)`,'Event'],
+    headers: ['Idx', 'Base', 'Quote','ChgRate','Price','High','Low','(Buy:Sell)',`Volume`,`${collection_time_}min(%)`,'Event'],
     data: [
       ...[['','','','','','','','','',''],
       ...table_data]
