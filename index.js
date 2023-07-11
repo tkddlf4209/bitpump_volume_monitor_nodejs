@@ -1052,7 +1052,7 @@ function initUI(){
 
   line_chart = grid.set(6, 9, 4, 3, contrib.line, 
     { 
-     maxY: 150
+     maxY: 125
     , label: 'Total Transactions'
     , showLegend: true
     , showNthLabel : false
