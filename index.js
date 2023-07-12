@@ -10,7 +10,7 @@ let colors = require('colors/safe')
 let moment = require('moment');
 require('moment-timezone');
 moment.tz.setDefault("Asia/Seoul");
-const EVENT_NOTI_TIME = 15000;
+const EVENT_NOTI_TIME = 10000;
 let  event_volume_ = 50000000;
 let event_log_save_timeout_ = 5;
 let collection_time_ = 60;
@@ -408,7 +408,7 @@ function getTradeStore(base, trade_history){
 }
 
 function formatNumber2(number) {
-  const formattedNumber = new Intl.NumberFormat('en-US', {
+  const formattedNumber = new Intl.NumberFormat('ko-KR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 15
   }).format(number);
@@ -521,7 +521,6 @@ function updateTradeObject(base, quote, trade){
     return acc
   },{
     total_volume : 0,
-   
   })
 
   let bid_result = bid_trade_object[base].reduce((acc, value)=>{
@@ -594,7 +593,7 @@ function updateTradeObject(base, quote, trade){
     ask_trade_object[base] = [];
 
     if(bid_result.total_volume >1000000){ // 꼽싸리는 뺴기위해 100만원이상만
-      addEventLog(`${base.padEnd(6)} ${colors.red(formatNumber(bid_result.total_volume))}   ${colors.yellow(bid_result.change_rate>0?bid_result.change_rate.toFixed(2)+"%":'')}`,{
+      addEventLog(`${base.padEnd(6)} ${colors.red(formatNumber(bid_result.total_volume))}  ${bid_result.change_rate>0?"±"+bid_result.change_rate.toFixed(2)+"%":''}`,{
         base : base,
         type : "bid",
         volume : bid_result.total_volume,
@@ -603,7 +602,7 @@ function updateTradeObject(base, quote, trade){
     }
 
     if(ask_result.total_volume >1000000){ // 꼽싸리는 뺴기위해 100만원이상만
-      addEventLog(`${base.padEnd(6)} ${colors.blue(formatNumber(ask_result.total_volume))}   ${colors.yellow(ask_result.change_rate>0?ask_result.change_rate.toFixed(2)+"%":'')}`,{
+      addEventLog(`${base.padEnd(6)} ${colors.blue(formatNumber(ask_result.total_volume))}  ${ask_result.change_rate>0?"±"+ask_result.change_rate.toFixed(2)+"%":''}`,{
         base : base ,
         type : "ask",
         volume : ask_result.total_volume
@@ -628,6 +627,7 @@ function updateTradeObject(base, quote, trade){
         // 알림 표시 시간이 안지난 이벤트 인경우 다른 알림이 표시되고있는 상태이면 기다리고 같은 타입이면 누적한다.
         if(event_object[base].type =="volume"){ // 같은 타입이면 누적
           event_object[base].value += total_result.total_volume;
+          event_object[base].timestamp = Date.now()
         }else{
           // 다른 타입의 알람을 지우고 새로 발생된 알림을 넣고싶으면 여기를 코딩할것 !
         }
@@ -636,56 +636,6 @@ function updateTradeObject(base, quote, trade){
 
   }
 
-
-  // if(result.total_volume > EVENT_VOLUME){  // 1초만에 일정금액 한방에 긁음
-    
-  //   //알림이 발생되면 초기화한다.
-  //   trade_object[base] = [];
-
-  //   let total_volume = result.total_volume;
-  //   let buy_volume = result.buy_volume;
-  //   let sell_volume =result.sell_volume;
-
-  //   let bid = `${((buy_volume/total_volume) * 100).toFixed(0)}%`;
-  //   let ask = `${((sell_volume/total_volume) * 100).toFixed(0)}%`;
-  //   let content = '';
-  //   if(buy_volume >sell_volume){
-  //     content = `${colors.red(((total_volume/100000000).toFixed(1))+`B (${bid})`)}`;
-  //   }else{
-  //     content = `${colors.blue(((total_volume/100000000).toFixed(1))+`B (${ask})`)}`;
-  //   }
-  //   addEventLog(`[${getHHmmss()}] ${base.padEnd(6)} ${content}`)
-
-  //   if(event_object[base] == null){
-  //     event_object[base] = {
-  //       timestamp : Date.now(),
-  //       type : "volume",
-  //       value : total_volume,
-  //     }
-  //   }else{
-  //     // 알림 표시 시간이 지난 이벤트는 새로운 알림 발행
-  //     if((Date.now() - event_object[base].timestamp) > EVENT_NOTI_TIME){
-  //       event_object[base] = {
-  //         timestamp : Date.now(),
-  //         type : "volume",
-  //         value : total_volume,
-  //       }
-  //     }else{
-  //       // 알림 표시 시간이 안지난 이벤트 인경우 다른 알림이 표시되고있는 상태이면 기다리고 같은 타입이면 누적한다.
-  //       if(event_object[base].type =="volume"){ // 같은 타입이면 누적
-  //         event_object[base].value += total_volume;
-  //       }else{
-  //         // 다른 타입의 알람을 지우고 새로 발생된 알림을 넣고싶으면 여기를 코딩할것 !
-  //       }
-  //     } 
-  //   }
-   
-  // }
-
-  //if(base == "BTC" && trade_object[base]){
-
-    //addEventLog(trade_object[base].length +"")
-  //}
 }
 
 
@@ -714,8 +664,6 @@ function handleTrade2(object, base, quote, trade) {
 
   let { timestamp ,trade_price , prev_closing_price} = trade
 
-  updatePriceChangeObject(base ,trade_price);
-  updateTradeObject(base , quote, trade);
 
   trade_price_bucket[base] = {
     trade_price : trade_price,
@@ -747,7 +695,7 @@ function handleTrade2(object, base, quote, trade) {
     Object.keys(object.trade_store).forEach(time_key=>{
     
       if(60000 * collection_time_  < Date.now() - Number(time_key)   ){
-        delete object.trade_store[time_key]
+        //delete object.trade_store[time_key]
       }
     });
 
@@ -764,11 +712,14 @@ function handleTrade2(object, base, quote, trade) {
 
   object.trade_store[time_key] = getTradeStore(base,object.trade_history);
 
+  
+  updatePriceChangeObject(base ,trade_price);
+  updateTradeObject(base , quote, trade);
+
 }
 
-let prev_object = {};
+
 let event_object = {};
-let trade_object = {}; // 심볼별 특정 정의된 시간초 동안의 trade 이력을 저장한다
 let total_trade_object = {}; // 심볼별 특정 정의된 시간초 동안의 trade 이력을 저장한다
 let bid_trade_object = {}; // 심볼별 특정 정의된 시간초 동안의 trade 이력을 저장한다
 let ask_trade_object = {}; // 심볼별 특정 정의된 시간초 동안의 trade 이력을 저장한다
@@ -776,10 +727,10 @@ let price_change_object = {}; // 가격 변동시 반짝임 이벤트 발생
 let high_price_change_object = {}; // 가격 변동시 반짝임 이벤트 발생
 let low_price_change_object = {}; // 가격 변동시 반짝임 이벤트 발생
 let current_bid_ask_object = {}; // 심볼별 최근 bid, ask 값 저장
-let latestLogData = [];
+let latestVolumeRank = [];
+let bucket = {};
 
 async function startVolumeRanker() {
-  let bucket = {};
   start_time = Date.now();
   await initMarketInfo(upbitExchange ,['KRW','BTC'], bucket)
   connectWebsocket("upbit", true , true ,bucket);
@@ -787,7 +738,7 @@ async function startVolumeRanker() {
   setInterval(()=>{
     let result = {};
 
-    for(let base in bucket ){
+    for(let base in bucket){
       let object  = bucket[base];
 
       //console.log(object);
@@ -825,8 +776,6 @@ async function startVolumeRanker() {
           quote : object.quote
         })
 
-        prev_object[base] = result[base];
-
       }
     }
 
@@ -845,6 +794,7 @@ async function startVolumeRanker() {
   
     let i =0;
     let logData= [];
+    let volumeBaseRank = [];
     let total_volume_sum =0;
     let buy_volume_sum =0;
     let sell_volume_sum =0;
@@ -920,7 +870,7 @@ async function startVolumeRanker() {
 
       row[COLUM_BID_ASK] = `(${bid > 50 ?colors.red(bid):bid}:${ask > 80 ?colors.blue(ask):ask})`; 
       
-      row[COLUM_ABSCHG] = object.change_rate.toFixed(2)+"%";
+      row[COLUM_ABSCHG] = "±"+object.change_rate.toFixed(2)+"%";
       row[COLUM_EVENT] =  ''
       if(event_object[base]){
       
@@ -940,6 +890,7 @@ async function startVolumeRanker() {
       }
       //console.log(row);
       logData.push(row)
+      volumeBaseRank.push(base);;
       //}
       i++;
     })
@@ -947,11 +898,10 @@ async function startVolumeRanker() {
     let total_buy = parseInt(((buy_volume_sum/total_volume_sum) * 100));
     let total_sell = parseInt(((sell_volume_sum/total_volume_sum) * 100));
 
-    latestLogData = logData;
+    latestVolumeRank = volumeBaseRank;
     updateBuySell(total_buy,total_sell , total_volume_sum)
     updateTable(logData);
     updateEventLogs();
-
 
     if(select_base){
       
@@ -959,44 +909,50 @@ async function startVolumeRanker() {
       line_chart.setLabel(`${colors.yellow(select_base)} Buy/Sell History`)
       let trade_store =  bucket[select_base]?.trade_store;
 
-      if(current_bid_ask_object[select_base]){
-        let x = [];
-        let y1=  [];
-        let y2=  [];
-      
-        Object.keys(trade_store).map(time_key =>{
-          x.push(getHHmm(time_key));
-          return trade_store[time_key] ;
-        }).forEach((object)=>{
-          y1.push(object.bid)
-          y2.push(object.ask)
-        });
+      if(trade_store){
 
-        line_chart.setData([ {
-          title: 'Buy',
-          style: {line: 'red'},
-          x: x,
-          y: y1
-        }, {
-          title: 'Sell',
-          style: {line: 'blue'},
-          x: x,
-          y: y2
-        }])
-
+        if(current_bid_ask_object[select_base]){
+          let x = [];
+          let y1=  [];
+          let y2=  [];
+        
+          Object.keys(trade_store).map(time_key =>{
+            x.push(getHHmm(time_key));
+            return trade_store[time_key] ;
+          }).forEach((object)=>{
+            y1.push(object.bid)
+            y2.push(object.ask)
+          });
+  
+          line_chart.setData([ {
+            title: 'Buy',
+            style: {line: 'red'},
+            x: x,
+            y: y1
+          }, {
+            title: 'Sell',
+            style: {line: 'blue'},
+            x: x,
+            y: y2
+          }])
+  
+          
+          // if(toggle_chart){
+          
+          // }else{
+           
+          // }
+        }else{
+          //bar_chart.hide();
+          //line_chart.hide();
+        }
         
         line_chart.show();
-      
-
-        // if(toggle_chart){
-        
-        // }else{
-         
-        // }
       }else{
-        //bar_chart.hide();
-        //line_chart.hide();
+
+        line_chart.hide();
       }
+      
     }else{
       //bar_chart.hide();
       line_chart.hide();
@@ -1010,7 +966,7 @@ async function startVolumeRanker() {
 }
 
 function formatNumber(number) {
-  return number.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return number.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
 }
 
 function setLineData(mockData, line) {
@@ -1059,7 +1015,7 @@ function initUI(){
     if(index == 0){
       select_base = null;
     }else{
-      select_base = latestLogData[index-1][COLUM_BASE];
+      select_base = latestVolumeRank[index-1];
       //addEventLog("select >> " + select_base)
     }
   })
