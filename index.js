@@ -135,7 +135,8 @@ async function initMarketInfo(cctx_ ,includesQuote, bucket){
 function connectWebsocket(exchange, bucket){
 
   const extractBaseQuote = (symbol) => {
-    const baseQuoteRegex = /([A-Z0-9]+)(USDT|BTC|BUSD)/;
+    
+    const baseQuoteRegex = /([A-Z0-9]+)(USDT|BTC|BUSD)$/; 
     const matches = symbol.match(baseQuoteRegex);
   
     if (matches) {
@@ -161,7 +162,11 @@ function connectWebsocket(exchange, bucket){
           let baseQuote = extractBaseQuote(item.s);
 
           // 모든 ticker를 수신받기 떄문에 버킷 심볼에 대한 타겟 Quote 가 일치한 시세만 처리한다
-          if(baseQuote !=null && (bucket[baseQuote.base]?.quote ===  baseQuote.quote) && !item.s.includes("_")){  // ETHUSDT_230929  , 언더바 붙은 이상한 심볼이 있음
+          if(baseQuote !=null && (bucket[baseQuote.base]?.quote ===  baseQuote.quote)){  // ETHUSDT_230929  , 언더바 붙은 이상한 심볼이 있음
+
+            // if(baseQuote.base == "T"){
+            //   addEventLog("T >>"+ bucket["T"].high+"::"+baseQuote.quote+"::"+bucket["T"].quote+":"+item.s ) // TUSDTRY
+            // }
 
             // if(item.s.startsWith("BTC")){
              
