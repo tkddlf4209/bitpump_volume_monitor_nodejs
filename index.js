@@ -103,18 +103,13 @@ async function initMarketInfo(cctx_ ,includesQuote, bucket){
             case "USDT": // USDT 마켓이 가장 높은 우선순위를 가진다.
               bucket[base] = market_info
               break;
-            case "USD":
+            case "BUSD":
               if(cctx_.markets[`${base}/USDT`] == null){ // 원화 마켓 코인이 없는 경우에만 추가
                 bucket[base] = market_info
               }
               break;
-            case "BUSD":
-              if(cctx_.markets[`${base}/USDT`] == null && cctx_.markets[`${base}/USD`] == null){ // 원화 마켓 코인이 없는 경우에만 추가
-                bucket[base] = market_info
-              }
-              break;
             case "BTC":
-              if(cctx_.markets[`${base}/USDT`] == null && cctx_.markets[`${base}/USD`] == null && cctx_.markets[`${base}/BUSD`] == null){ // 원화 마켓 코인이 없는 경우에만 추가
+              if(cctx_.markets[`${base}/USDT`] == null && cctx_.markets[`${base}/BUSD`] == null){ // 원화 마켓 코인이 없는 경우에만 추가
                 bucket[base] = market_info
               }
               break;
@@ -132,7 +127,7 @@ async function initMarketInfo(cctx_ ,includesQuote, bucket){
 function connectWebsocket(exchange, bucket){
 
   const extractBaseQuote = (symbol) => {
-    const baseQuoteRegex = /([A-Z0-9]+)(USDT|BTC|BUSD|USD)/;
+    const baseQuoteRegex = /([A-Z0-9]+)(USDT|BTC|BUSD)/;
     const matches = symbol.match(baseQuoteRegex);
   
     if (matches) {
@@ -644,7 +639,6 @@ function connectWebsocket(exchange, bucket){
                 }
               case "BUSD": // usd2krw 값 초기화 필요
               case "USDT": // usd2krw 값 초기화 필요
-              case "USD": // usd2krw 값 초기화 필요
               case "KRW":
                 //console.log(market_info)
                 handleTrade2(market_info, base, quote, data);
@@ -691,8 +685,6 @@ const getKrwPrice = (quote , price ) =>{
       switch(quote){
         case "USDT":
         case "BUSD":
-        case "USD":
-          adjust = USD2KRW; // 원달러 환율
           break;
         case "BTC":
           adjust = latest_btc_krw_price + USD2KRW;
@@ -1066,7 +1058,7 @@ async function startVolumeRanker() {
       await initMarketInfo(bithumbExchange ,['KRW','BTC'], bucket) //,'BTC'
       break;
     case EXCHANGE_BINANCE:
-      await initMarketInfo(binanceExchange ,['USDT','USD','BUSD','BTC'], bucket) //,'BTC'
+      await initMarketInfo(binanceExchange ,['USDT','BUSD','BTC'], bucket) //,'BTC'
       break;
   }
 
@@ -1167,7 +1159,7 @@ async function startVolumeRanker() {
           row[COLUM_QUOTE] = object.quote == "KRW"?`${colors.red(object.quote)}`:`${colors.blue(object.quote)}`;
           break;
         case EXCHANGE_BINANCE:
-          row[COLUM_QUOTE] = object.quote == "USDT"?`${colors.red(object.quote)}`:object.quote == "USD"?`${colors.green(object.quote)}`:`${colors.blue(object.quote)}`;
+          row[COLUM_QUOTE] = object.quote == "USDT"?`${colors.red(object.quote)}`:object.quote == "BUSD"?`${colors.green(object.quote)}`:`${colors.blue(object.quote)}`;
             break;
       }
       
