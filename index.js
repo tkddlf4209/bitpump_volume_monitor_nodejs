@@ -96,8 +96,8 @@ async function initMarketInfo(cctx_ ,includesQuote, bucket){
                 bucket[base] = market_info
               }
               break;
-          }
-          break;
+          } 
+          break; 
         case EXCHANGE_BINANCE:
           switch(quote){
             case "USDT": // USDT 마켓이 가장 높은 우선순위를 가진다.
