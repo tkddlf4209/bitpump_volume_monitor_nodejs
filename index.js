@@ -685,6 +685,7 @@ const getKrwPrice = (quote , price ) =>{
       switch(quote){
         case "USDT":
         case "BUSD":
+          adjust = USD2KRW;
           break;
         case "BTC":
           adjust = latest_btc_krw_price + USD2KRW;
