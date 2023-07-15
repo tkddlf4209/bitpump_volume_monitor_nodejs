@@ -3,6 +3,9 @@ const axios = require('axios').default;
 const upbitExchange = new ccxt.upbit();
 const bithumbExchange = new ccxt.bithumb();
 const binanceExchange = new ccxt.binance();
+const binanceusdmExchange = new ccxt.binanceusdm();
+const gateioExchange = new ccxt.gateio();
+
 const ReconnectingWebSocket = require('reconnecting-websocket');
 const WebSocket = require('ws');
 const blessed = require('blessed');
@@ -17,12 +20,15 @@ let  event_volume_ = 50000000;
 let event_log_save_timeout_ = 5;
 let collection_time_ = 60;
 let filter_market_ = 1; // 1. 전체 ,2 KRW , 3.BTC
+let exclude_symbols_ = [];
 
 
 
 const EXCHANGE_UPBIT = "upbit"
 const EXCHANGE_BITHUMB = "bithumb";
 const EXCHANGE_BINANCE = "binance";
+const EXCHANGE_BINANCE_USDM = "binanceusdm"; // margin
+const EXCHANGE_GATEIO = "gateio";
 const INTERVAL_TIME = 100;
 
 const TYPE_TICKER = 1;
@@ -99,6 +105,8 @@ async function initMarketInfo(cctx_ ,includesQuote, bucket){
           } 
           break; 
         case EXCHANGE_BINANCE:
+        case EXCHANGE_BINANCE_USDM:
+        case EXCHANGE_GATEIO:
           switch(quote){
             case "USDT": // USDT 마켓이 가장 높은 우선순위를 가진다.
               bucket[base] = market_info
@@ -144,194 +152,69 @@ function connectWebsocket(exchange, bucket){
   }
 
   const parseCommonObj = (exchange, data) =>{
-    //console.log(data);
-    if(data?.type == "ticker" || data?.e =="24hrTicker"){
-      switch(exchange){
-        case EXCHANGE_UPBIT:
-          return [
-            {
+
+    if(exchange == EXCHANGE_BINANCE || exchange == EXCHANGE_BINANCE_USDM){
+ 
+      if(Array.isArray(data)){ // ticker arrs
+        return data.map(item =>{
+          //console.log(item);
+          let baseQuote = extractBaseQuote(item.s);
+
+          // 모든 ticker를 수신받기 떄문에 버킷 심볼에 대한 타겟 Quote 가 일치한 시세만 처리한다
+          if(baseQuote !=null && (bucket[baseQuote.base]?.quote ===  baseQuote.quote) && !item.s.includes("_")){  // ETHUSDT_230929  , 언더바 붙은 이상한 심볼이 있음
+
+            // if(item.s.startsWith("BTC")){
+             
+            //   addEventLog(JSON.stringify({
+            //     s : item.s, h : item.h , l :  item.l
+            //   }))
+            // }
+            return  {
               type : TYPE_TICKER,
-              market : data.code,
-              base : data.code.split("-")[1],
-              quote : data.code.split("-")[0],
-              price : data.trade_price,
-              high : data.high_price,
-              low : data.low_price ,
-              prev_price : data.prev_closing_price
-            }
-          ];
-
-              // {
-              //   type: 'ticker',
-              //   code: 'KRW-BTC',
-              //   opening_price: 40610000,
-              //   high_price: 40775000,
-              //   low_price: 39801000,
-              //   trade_price: 40120000,
-              //   prev_closing_price: 40610000,
-              //   acc_trade_price: 121252190991.84348,
-              //   change: 'FALL',
-              //   timestamp: 1688569635480,
-              //   acc_trade_price_24h: 153503385930.03625,
-              //   acc_trade_volume_24h: 3801.58811657,
-              //   stream_type: 'REALTIME'
-              // }
-              // if(code == "KRW-BTC"){
-              //   console.log(data);
-              // }
-        case EXCHANGE_BITHUMB:
-          return [
-            {
-              type : TYPE_TICKER,
-              market : data.content.symbol,
-              base : data.content.symbol.split("_")[0],
-              quote : data.content.symbol.split("_")[1],
-              price : data.content.closePrice,
-              high : data.content.highPrice,
-              low : data.content.lowPrice ,
-              prev_price : data.content.prevClosePrice
-            }
-          ]
-
-               //   {
-        //     "type" : "ticker",
-        //     "content" : {
-        //         "symbol" : "BTC_KRW",           // 통화코드
-        //         "tickType" : "24H",                 // 변동 기준시간- 30M, 1H, 12H, 24H, MID
-        //         "date" : "20200129",                // 일자
-        //         "time" : "121844",                  // 시간
-        //         "openPrice" : "2302",               // 시가
-        //         "closePrice" : "2317",              // 종가
-        //         "lowPrice" : "2272",                // 저가
-        //         "highPrice" : "2344",               // 고가
-        //         "value" : "2831915078.07065789",    // 누적거래금액
-        //         "volume" : "1222314.51355788",  // 누적거래량
-        //         "sellVolume" : "760129.34079004",   // 매도누적거래량
-        //         "buyVolume" : "462185.17276784",    // 매수누적거래량
-        //         "prevClosePrice" : "2326",          // 전일종가
-        //         "chgRate" : "0.65",                 // 변동률
-        //         "chgAmt" : "15",                    // 변동금액
-        //         "volumePower" : "60.80"         // 체결강도
-        //     }
-        // }
-
-        case EXCHANGE_BINANCE:
-          let baseQuote = extractBaseQuote(data.s);
-
-          return [
-            {
-              type : TYPE_TICKER,
-              market : data.s,
+              market : item.s,
               base : baseQuote.base,
               quote : baseQuote.quote,
-              price : data.c,
-              high : data.h,
-              low : data.l ,
-              prev_price : data.x
+              price : item.c,
+              high : item.h,
+              low : item.l ,
+              prev_price : item.o
             }
-          ]
-          // {
-          //   "e": "24hrTicker",         // 이벤트 타입 (Event Type): 24시간 티커 이벤트
-          //   "E": 1689394086956,       // 이벤트 시간 (Event Time): 타임스탬프 (밀리초 단위)
-          //   "s": "KAVAUSDT",           // 심볼 (Symbol): 가상화폐 심볼
-          //   "p": "-0.03600000",       // 가격 변동 (Price Change)
-          //   "P": "-3.738",            // 가격 변동률 (Price Change Percentage)
-          //   "w": "0.95000234",        // 평균 가격 (Weighted Average Price)
-          //   "x": "0.96300000",        // 이전 거래의 가격 (Previous Day's Close Price)
-          //   "c": "0.92700000",        // 현재 가격 (Current Day's Close Price)
-          //   "Q": "106.40000000",      // 최근 거래의 체결된 수량 (Last Quantity)
-          //   "b": "0.92700000",        // 최고 매수 가격 (Best Bid Price)
-          //   "B": "8157.40000000",     // 최고 매수 수량 (Best Bid Quantity)
-          //   "a": "0.92800000",        // 최저 매도 가격 (Best Ask Price)
-          //   "A": "42.30000000",       // 최저 매도 수량 (Best Ask Quantity)
-          //   "o": "0.96300000",        // 시가 (Open Price)
-          //   "h": "0.98100000",        // 고가 (High Price)
-          //   "l": "0.89800000",        // 저가 (Low Price)
-          //   "v": "13218390.40000000", // 거래량 (Volume)
-          //   "q": "12557501.86440000", // 거래 금액 (Quote Asset Volume)
-          //   "O": 1689307686955,       // 시가 타임스탬프 (Open Time)
-          //   "C": 1689394086955,       // 종가 타임스탬프 (Close Time)
-          //   "F": 67096273,            // 처음 거래 ID (First Trade ID)
-          //   "L": 67129443,            // 마지막 거래 ID (Last Trade ID)
-          //   "n": 33171                // 거래 횟수 (Trade Count)
-          // }
-      }
-    }
-
-    if(data?.type == "trade" || data?.type == "transaction" || data?.e =="trade"){
-      
-      switch(exchange){
-        case EXCHANGE_UPBIT:
-          return [
-            {
-              type : TYPE_TRADE,
-              market : data.code,
-              base : data.code.split("-")[1],
-              quote : data.code.split("-")[0],
-              price : data.trade_price,
-              volume : data.trade_volume,
-              ask_bid : data.ask_bid =="BID"?TYPE_BID:TYPE_ASK,
-              //prev_price : data.prev_closing_price,
-              timestamp : data.timestamp
-            }
-          ];
-
-              // {
-              //   type: 'trade',
-              //   code: 'KRW-BTC',
-              //   timestamp: 1688569587136,
-              //   trade_date: '2023-07-05',
-              //   trade_time: '15:06:27',
-              //   trade_timestamp: 1688569587110,
-              //   trade_price: 40120000,
-              //   trade_volume: 0.06279356,
-              //   ask_bid: 'ASK',
-              //   prev_closing_price: 40610000,
-              //   change: 'FALL',
-              //   change_price: 490000,
-              //   sequential_id: 1688569587110000,
-              //   stream_type: 'REALTIME'
-              // }
-              // if(code == "KRW-BTC"){
-              //   console.log(data);
-              // }
-        case EXCHANGE_BITHUMB:
-         
-          return data.content.list.map(item =>{
-          
-            return {
-              type : TYPE_TRADE,
-              market : item.symbol,
-              base : item.symbol.split("_")[0],
-              quote : item.symbol.split("_")[1],
-              price : item.contPrice,
-              volume : item.contQty,
-              ask_bid : item.buySellGb ==1?TYPE_ASK :TYPE_BID,
-              //prev_price : item.contPrice, //data.prev_closing_price,
-              timestamp : moment(item.contDtm).valueOf()
-            }
-          })
-        
-        // {
-        //     "type" : "transaction",
-        //     "content" : {
-        //         "list" : [
-        //             {
-        //                 "symbol" : "BTC_KRW",                   // 통화코드
-        //                 "buySellGb" : "1",                          // 체결종류(1:매도체결, 2:매수체결)
-        //                 "contPrice" : "10579000",                   // 체결가격
-        //                 "contQty" : "0.01",                         // 체결수량
-        //                 "contAmt" : "105790.00",                    // 체결금액
-        //                 "contDtm" : "2020-01-29 12:24:18.830039",   // 체결시각
-        //                 "updn" : "dn"                               // 직전 시세와 비교 : up-상승, dn-하락
-        //             }
-        //         ]
-        //     }
-        // }
-
-        case EXCHANGE_BINANCE:
+          }else{
+            return null
+          }
+            // {
+            //   "e": "24hrTicker",         // 이벤트 타입 (Event Type): 24시간 티커 이벤트
+            //   "E": 1689394086956,       // 이벤트 시간 (Event Time): 타임스탬프 (밀리초 단위)
+            //   "s": "KAVAUSDT",           // 심볼 (Symbol): 가상화폐 심볼
+            //   "p": "-0.03600000",       // 가격 변동 (Price Change)
+            //   "P": "-3.738",            // 가격 변동률 (Price Change Percentage)
+            //   "w": "0.95000234",        // 평균 가격 (Weighted Average Price)
+            //   "x": "0.96300000",        // 이전 거래의 가격 (Previous Day's Close Price)
+            //   "c": "0.92700000",        // 현재 가격 (Current Day's Close Price)
+            //   "Q": "106.40000000",      // 최근 거래의 체결된 수량 (Last Quantity)
+            //   "b": "0.92700000",        // 최고 매수 가격 (Best Bid Price)
+            //   "B": "8157.40000000",     // 최고 매수 수량 (Best Bid Quantity)
+            //   "a": "0.92800000",        // 최저 매도 가격 (Best Ask Price)
+            //   "A": "42.30000000",       // 최저 매도 수량 (Best Ask Quantity)
+            //   "o": "0.96300000",        // 시가 (Open Price)
+            //   "h": "0.98100000",        // 고가 (High Price)
+            //   "l": "0.89800000",        // 저가 (Low Price)
+            //   "v": "13218390.40000000", // 거래량 (Volume)
+            //   "q": "12557501.86440000", // 거래 금액 (Quote Asset Volume)
+            //   "O": 1689307686955,       // 시가 타임스탬프 (Open Time)
+            //   "C": 1689394086955,       // 종가 타임스탬프 (Close Time)
+            //   "F": 67096273,            // 처음 거래 ID (First Trade ID)
+            //   "L": 67129443,            // 마지막 거래 ID (Last Trade ID)
+            //   "n": 33171                // 거래 횟수 (Trade Count)
+            // }
+        })
+      }else{
+        if(data["id"] !=null){ // id 가 있으면 
+          return [];
+        }else{
+          // trade 
           let baseQuote = extractBaseQuote(data.s);
-         
+        
           return [
             {
               type : TYPE_TRADE,
@@ -345,22 +228,231 @@ function connectWebsocket(exchange, bucket){
               timestamp : data.T
             }
           ]
-
-          // {
-          //   "e": "trade",         // 이벤트 타입 (Event Type): 거래 이벤트
-          //   "E": 1689394132002,   // 이벤트 시간 (Event Time): 타임스탬프 (밀리초 단위)
-          //   "s": "STXUSDT",       // 심볼 (Symbol): 거래가 발생한 가상화폐 심볼
-          //   "t": 37381119,        // 거래 ID (Trade ID): 거래의 고유 식별자
-          //   "p": "0.64050000",    // 가격 (Price): 거래의 체결 가격
-          //   "q": "49.70000000",   // 수량 (Quantity): 거래의 체결된 수량
-          //   "b": 460966168,       // 구매자 주문 ID (Buyer Order ID)
-          //   "a": 460966133,       // 판매자 주문 ID (Seller Order ID)
-          //   "T": 1689394132001,   // 거래 시간 (Trade Time): 거래가 체결된 타임스탬프 (밀리초 단위)
-          //   "m": false,           // 체결 유형 (Is the buyer the market maker?): false일 경우 구매자가 시장 메이커가 아님
-          //   "M": true             // 마켓 메이커 거래 (Ignore): 무시해도 되는 추가 정보
-          // }
+        }
       }
+    }else{ // upbit , bithunb, gateio
+      if(data?.type == "ticker" ||  data?.method =="ticker.update"){
+        switch(exchange){
+          case EXCHANGE_UPBIT:
+            return [
+              {
+                type : TYPE_TICKER,
+                market : data.code,
+                base : data.code.split("-")[1],
+                quote : data.code.split("-")[0],
+                price : data.trade_price,
+                high : data.high_price,
+                low : data.low_price ,
+                prev_price : data.prev_closing_price
+              }
+            ];
+
+                // {
+                //   type: 'ticker',
+                //   code: 'KRW-BTC',
+                //   opening_price: 40610000,
+                //   high_price: 40775000,
+                //   low_price: 39801000,
+                //   trade_price: 40120000,
+                //   prev_closing_price: 40610000,
+                //   acc_trade_price: 121252190991.84348,
+                //   change: 'FALL',
+                //   timestamp: 1688569635480,
+                //   acc_trade_price_24h: 153503385930.03625,
+                //   acc_trade_volume_24h: 3801.58811657,
+                //   stream_type: 'REALTIME'
+                // }
+                // if(code == "KRW-BTC"){
+                //   console.log(data);
+                // }
+          case EXCHANGE_BITHUMB:
+            return [
+              {
+                type : TYPE_TICKER,
+                market : data.content.symbol,
+                base : data.content.symbol.split("_")[0],
+                quote : data.content.symbol.split("_")[1],
+                price : data.content.closePrice,
+                high : data.content.highPrice,
+                low : data.content.lowPrice ,
+                prev_price : data.content.prevClosePrice
+              }
+            ]
+
+                //   {
+          //     "type" : "ticker",
+          //     "content" : {
+          //         "symbol" : "BTC_KRW",           // 통화코드
+          //         "tickType" : "24H",                 // 변동 기준시간- 30M, 1H, 12H, 24H, MID
+          //         "date" : "20200129",                // 일자
+          //         "time" : "121844",                  // 시간
+          //         "openPrice" : "2302",               // 시가
+          //         "closePrice" : "2317",              // 종가
+          //         "lowPrice" : "2272",                // 저가
+          //         "highPrice" : "2344",               // 고가
+          //         "value" : "2831915078.07065789",    // 누적거래금액
+          //         "volume" : "1222314.51355788",  // 누적거래량
+          //         "sellVolume" : "760129.34079004",   // 매도누적거래량
+          //         "buyVolume" : "462185.17276784",    // 매수누적거래량
+          //         "prevClosePrice" : "2326",          // 전일종가
+          //         "chgRate" : "0.65",                 // 변동률
+          //         "chgAmt" : "15",                    // 변동금액
+          //         "volumePower" : "60.80"         // 체결강도
+          //     }
+          // }
+
+          case EXCHANGE_GATEIO:
+            let market = data.params[0];
+            let gio_obj = data.params[1];
+
+            return [
+              {
+                type : TYPE_TICKER,
+                market : market,
+                base : market.split("_")[0],
+                quote : market.split("_")[1],
+                price : gio_obj.last,
+                high : gio_obj.high,
+                low : gio_obj.low ,
+                prev_price : gio_obj.open
+              }
+            ]
+
+            // {
+            //   "params": [
+            //     "PAF_USDT",            // 심볼 (Symbol): PAF_USDT
+            //     {
+            //       "period": 86400,     // 기간 (Period): 86400 (24시간)
+            //       "open": "0.000308283", // 시가 (Open): 0.000308283
+            //       "close": "0.0003011",  // 종가 (Close): 0.0003011
+            //       "high": "0.000312",    // 고가 (High): 0.000312
+            //       "low": "0.0002768",    // 저가 (Low): 0.0002768
+            //       "last": "0.0003011",   // 최근 거래 가격 (Last): 0.0003011
+            //       "change": "-2.33",     // 변동률 (Change): -2.33%
+            //       "quoteVolume": "47028162.976229",  // 거래 금액 (Quote Volume): 47028162.976229 USDT
+            //       "baseVolume": "14267.10628802"     // 거래량 (Base Volume): 14267.10628802 PAF
+            //     }
+            //   ]
+            // }
+        }
+      }
+      
+      if(data?.type == "trade" || data?.type == "transaction" || data?.method =="trades.update"){
+        
+        switch(exchange){
+          case EXCHANGE_UPBIT:
+            return [
+              {
+                type : TYPE_TRADE,
+                market : data.code,
+                base : data.code.split("-")[1],
+                quote : data.code.split("-")[0],
+                price : data.trade_price,
+                volume : data.trade_volume,
+                ask_bid : data.ask_bid =="BID"?TYPE_BID:TYPE_ASK,
+                //prev_price : data.prev_closing_price,
+                timestamp : data.timestamp
+              }
+            ];
+
+                // {
+                //   type: 'trade',
+                //   code: 'KRW-BTC',
+                //   timestamp: 1688569587136,
+                //   trade_date: '2023-07-05',
+                //   trade_time: '15:06:27',
+                //   trade_timestamp: 1688569587110,
+                //   trade_price: 40120000,
+                //   trade_volume: 0.06279356,
+                //   ask_bid: 'ASK',
+                //   prev_closing_price: 40610000,
+                //   change: 'FALL',
+                //   change_price: 490000,
+                //   sequential_id: 1688569587110000,
+                //   stream_type: 'REALTIME'
+                // }
+                // if(code == "KRW-BTC"){
+                //   console.log(data);
+                // }
+          case EXCHANGE_BITHUMB:
+          
+            return data.content.list.map(item =>{
+              return {
+                type : TYPE_TRADE,
+                market : item.symbol,
+                base : item.symbol.split("_")[0],
+                quote : item.symbol.split("_")[1],
+                price : item.contPrice,
+                volume : item.contQty,
+                ask_bid : item.buySellGb ==1?TYPE_ASK :TYPE_BID,
+                //prev_price : item.contPrice, //data.prev_closing_price,
+                timestamp : moment(item.contDtm).valueOf()
+              }
+            })
+          
+          // {
+          //     "type" : "transaction",
+          //     "content" : {
+          //         "list" : [
+          //             {
+          //                 "symbol" : "BTC_KRW",                   // 통화코드
+          //                 "buySellGb" : "1",                          // 체결종류(1:매도체결, 2:매수체결)
+          //                 "contPrice" : "10579000",                   // 체결가격
+          //                 "contQty" : "0.01",                         // 체결수량
+          //                 "contAmt" : "105790.00",                    // 체결금액
+          //                 "contDtm" : "2020-01-29 12:24:18.830039",   // 체결시각
+          //                 "updn" : "dn"                               // 직전 시세와 비교 : up-상승, dn-하락
+          //             }
+          //         ]
+          //     }
+          // }
+
+          
+            // {
+            //   "e": "trade",         // 이벤트 타입 (Event Type): 거래 이벤트
+            //   "E": 1689394132002,   // 이벤트 시간 (Event Time): 타임스탬프 (밀리초 단위)
+            //   "s": "STXUSDT",       // 심볼 (Symbol): 거래가 발생한 가상화폐 심볼
+            //   "t": 37381119,        // 거래 ID (Trade ID): 거래의 고유 식별자
+            //   "p": "0.64050000",    // 가격 (Price): 거래의 체결 가격
+            //   "q": "49.70000000",   // 수량 (Quantity): 거래의 체결된 수량
+            //   "b": 460966168,       // 구매자 주문 ID (Buyer Order ID)
+            //   "a": 460966133,       // 판매자 주문 ID (Seller Order ID)
+            //   "T": 1689394132001,   // 거래 시간 (Trade Time): 거래가 체결된 타임스탬프 (밀리초 단위)
+            //   "m": false,           // 체결 유형 (Is the buyer the market maker?): false일 경우 구매자가 시장 메이커가 아님
+            //   "M": true             // 마켓 메이커 거래 (Ignore): 무시해도 되는 추가 정보
+            // }
+
+            
+          case EXCHANGE_GATEIO:
+            let market = data.params[0];
+            let gio_obj = data.params[1];
+
+            return gio_obj.map(item =>{
+              return {
+                type : TYPE_TRADE,
+                market : market,
+                base : market.split("_")[0],
+                quote : market.split("_")[1],
+                price : item.price,
+                volume : item.amount,
+                ask_bid : item.type =="sell"?TYPE_ASK :TYPE_BID,
+                //prev_price : item.contPrice, //data.prev_closing_price,
+                timestamp : item.time
+              }
+            })
+
+            // {
+            //   "id": 5948853893,
+            //   "time": 1689418781.095736,
+            //   "price": "1.035",
+            //   "amount": "9.305",
+            //   "type": "sell"
+            // },
+        }
+      }
+
     }
+   
 
     return [];
   }
@@ -376,6 +468,12 @@ function connectWebsocket(exchange, bucket){
     case EXCHANGE_BINANCE: // 바이낸스는 소켓 연결 시에 마켓 정보를 담아서 요청한다
       url = 'wss://stream.binance.com:9443/ws';
       break;
+    case EXCHANGE_BINANCE_USDM: // 바이낸스는 소켓 연결 시에 마켓 정보를 담아서 요청한다
+      url = 'wss://fstream.binance.com/ws';
+      break;
+    case EXCHANGE_GATEIO:
+      url = 'wss://ws.gate.io/v3/';
+      break;
   }
 
 // 웹소켓 연결
@@ -386,7 +484,16 @@ function connectWebsocket(exchange, bucket){
   //ws.reconnectInterval = 60000; // try to reconnect after 10 seconds
 
   ws.addEventListener('open', () => {
-    //console.log(`${exchange} WebSocket connection opened`);
+    console.log(`${exchange} WebSocket connection opened`);
+
+    // 제외 심볼이 포함되어있는 경우 제거한다.
+    for(let base in bucket){
+         
+      if(exclude_symbols_.includes(base)){
+          delete bucket[base];
+          continue;
+      }
+    }
     
     // 마켓 필터에 따라서 제외한다.
     switch(exchange){
@@ -408,29 +515,9 @@ function connectWebsocket(exchange, bucket){
         break;
         
       case EXCHANGE_BINANCE:
-        // for(let base in bucket){
-         
-        //   if(filter_market_ == 2 && bucket[base].quote != "USDT"){
-        //     delete bucket[base];
-        //     continue;
-        //   }
-        //   if(filter_market_ == 3 && bucket[base].quote != "USD"){
-        //     delete bucket[base];
-        //     continue;
-        //   }
-
-        //   if(filter_market_ == 4 && bucket[base].quote != "BUSD"){
-        //     delete bucket[base];
-        //     continue;
-        //   }
-
-        //   if(filter_market_ == 5 && bucket[base].quote != "BTC"){
-        //     delete bucket[base];
-        //     continue;
-        //   }else{
-           
-        //   }
-        // }
+      case EXCHANGE_BINANCE_USDM:
+      case EXCHANGE_GATEIO:
+        // 해외거래소는 제거 하지 않음
         break;
     }
 
@@ -503,20 +590,20 @@ function connectWebsocket(exchange, bucket){
         }));
 
         break;
-
         
       /** BINANCE **/
       case EXCHANGE_BINANCE:
-
+      case EXCHANGE_BINANCE_USDM:
+       
+        //const tickerStream = `btcusdt@ticker`;
+        //ws.send(JSON.stringify({ "method": "SUBSCRIBE", "params": [tickerStream], "id": 1 }));
         let params =  Object.keys(bucket).map(key =>{
           let {base , quote} = bucket[key];
-          return `${base}${quote}@ticker`.toLowerCase(); // kRW-BTC
-        });
-        
-        if(bucket["BTC"] == null){
-          params.push(`btcusdt@ticker`)
-        }
-    
+          return `${base}${quote}@trade`.toLowerCase(); // kRW-BTC
+        }); // trade 는 필터링.
+
+        params.push("!ticker@arr"); // 모든 티커 수신 , 이걸로안하면 length 에러남.
+  
         // 1. subscrive ticker
         ws.send(JSON.stringify({
           method: 'SUBSCRIBE',
@@ -524,24 +611,51 @@ function connectWebsocket(exchange, bucket){
           id: 1
         }))
 
-        // 2. subscrive trade
-        ws.send(JSON.stringify({
-          method: 'SUBSCRIBE',
-          params : Object.keys(bucket).map(key =>{
-            let {base , quote} = bucket[key];
-            return `${base}${quote}@trade`.toLowerCase(); // kRW-BTC
-          }),
-          id: 2
-        }))
+        //2. subscrive trade
+        // ws.send(JSON.stringify({
+        //   method: 'SUBSCRIBE',
+        //   params : Object.keys(bucket).map(key =>{
+        //     let {base , quote} = bucket[key];
+        //     return `${base}${quote}@trade`.toLowerCase(); // kRW-BTC
+        //   }),
+        //   id: 2
+        // }))
       
         break;
+      case EXCHANGE_GATEIO:
+        let ku_param = Object.keys(bucket).map(key =>{
+          let {base , quote} = bucket[key];
+          return `${base}_${quote}`.toUpperCase(); // kRW-BTC
+        })
+        
+        if(bucket["BTC"] == null){
+          ku_param.push(`BTC_USDT`)
+        }
+        
+        ws.send(JSON.stringify({
+          id: 1234,
+          method: 'ticker.subscribe',
+          params: ku_param
+        }));
+
+        ws.send(JSON.stringify({
+          id: 5678,
+          method: 'trades.subscribe',
+          params: Object.keys(bucket).map(key =>{
+            let {base , quote} = bucket[key];
+            return `${base}_${quote}`.toUpperCase(); // kRW-BTC
+          })
+        }));
+
+        break;
+
     }
   });
 
   ws.addEventListener('message', (event) => {
     //console.log(event.data);
-    let obj_list = parseCommonObj(exchange, JSON.parse(event.data));
-  
+    let obj_list = parseCommonObj(exchange, JSON.parse(event.data)).filter(obj => obj != null);
+    //{"method":"ticker.update","params":["PAF_USDT",{"period":86400,"open":"0.000308283","close":"0.0003011","high":"0.000312","low":"0.0002768","last":"0.0003011","change":"-2.33","quoteVolume":"47028162.976229","baseVolume":"14267.10628802"}],"id":null,"v":3}
     for(let data of obj_list){
       let {type , price , market , base , quote} = data;
       switch(type){
@@ -551,9 +665,9 @@ function connectWebsocket(exchange, bucket){
           let upper_market = market.toUpperCase();
 
           // BTC 마켓 현재가 환산을 위한 값 산출 및 비트코인 변동 알림을 위한 값 설정
-          if(upper_market == "KRW-BTC" || upper_market =="BTC_KRW" || upper_market =="BTCUSDT"){
+          if(upper_market == "KRW-BTC" || upper_market =="BTC_KRW" || upper_market =="BTCUSDT" || upper_market =="BTC_USDT"){
 
-            if(upper_market == "BTCUSDT"){
+            if(upper_market == "BTCUSDT" || upper_market == "BTC_USDT"){
               latest_btc_krw_price = price * USD2KRW;
             }else{
               latest_btc_krw_price = price;
@@ -645,7 +759,6 @@ function connectWebsocket(exchange, bucket){
                 break;
             }
           }
-
           break;
       }
     }
@@ -653,8 +766,8 @@ function connectWebsocket(exchange, bucket){
     //console.log('Received message:',data );
   });
 
-  ws.addEventListener('close', () => {
-    //console.log('WebSocket connection closed');
+  ws.addEventListener('close', (e) => {
+    console.log('WebSocket connection closed >> ',e);
   });
 
   ws.addEventListener('error', (e) => {
@@ -682,6 +795,8 @@ const getKrwPrice = (quote , price ) =>{
       }
       break;
     case EXCHANGE_BINANCE:
+    case EXCHANGE_BINANCE_USDM:
+    case EXCHANGE_GATEIO:
       switch(quote){
         case "USDT":
         case "BUSD":
@@ -696,7 +811,6 @@ const getKrwPrice = (quote , price ) =>{
 
   return price * adjust;
 }
-
 
 function getTradeStore(base, trade_history){
   return trade_history.reduce((acc,trade) =>{
@@ -1056,10 +1170,16 @@ async function startVolumeRanker() {
       await initMarketInfo(upbitExchange ,['KRW','BTC'], bucket)
       break;
     case EXCHANGE_BITHUMB:
-      await initMarketInfo(bithumbExchange ,['KRW','BTC'], bucket) //,'BTC'
+      await initMarketInfo(bithumbExchange ,['KRW','BTC'], bucket)
       break;
     case EXCHANGE_BINANCE:
-      await initMarketInfo(binanceExchange ,['USDT','BUSD','BTC'], bucket) //,'BTC'
+      await initMarketInfo(binanceExchange ,['USDT','BUSD','BTC'], bucket) 
+      break;
+    case EXCHANGE_BINANCE_USDM:
+      await initMarketInfo(binanceusdmExchange ,['USDT'], bucket) 
+      break;
+    case EXCHANGE_GATEIO:
+      await initMarketInfo(gateioExchange ,['USDT'], bucket) 
       break;
   }
 
@@ -1127,6 +1247,7 @@ async function startVolumeRanker() {
     let buy_volume_sum =0;
     let sell_volume_sum =0;
     bases.forEach(base =>{
+
       let object = result[base];
 
       // 전체장 통계를
@@ -1160,6 +1281,8 @@ async function startVolumeRanker() {
           row[COLUM_QUOTE] = object.quote == "KRW"?`${colors.red(object.quote)}`:`${colors.blue(object.quote)}`;
           break;
         case EXCHANGE_BINANCE:
+        case EXCHANGE_BINANCE_USDM:
+        case EXCHANGE_GATEIO:
           row[COLUM_QUOTE] = object.quote == "USDT"?`${colors.red(object.quote)}`:object.quote == "BUSD"?`${colors.green(object.quote)}`:`${colors.blue(object.quote)}`;
             break;
       }
@@ -1218,6 +1341,7 @@ async function startVolumeRanker() {
           switch(type){
             case "volume":
               //row[COLUM_EVENT]  = colors.yellow(`volume ${(value/100000000).toFixed(1)}B`)
+              //addEventLog(formatNumber(value));
               row[COLUM_EVENT]  = colors.yellow(`+${formatNumber(value)}`); 
               break;
           }
@@ -1227,6 +1351,7 @@ async function startVolumeRanker() {
         
       }
       //console.log(row);
+     
       logData.push(row)
       volumeBaseRank.push(base);
       //}
@@ -1366,7 +1491,7 @@ function initUI(){
       interactive: true,
       label: 'Volume Rank Table',
       columnSpacing: 1, // in chars
-      columnWidth: [4, 8, 6, 10, 14, 14,14, 11, 21,10, 12] /* in chars */
+      columnWidth: [4, 9, 6, 10, 14, 14,14, 11, 24,10 ,17] /* in chars */
   })
   
   data_table.rows.on('select', (item, index) => {
@@ -1442,9 +1567,10 @@ async function getConditions() {
   if(process.argv[2]){ // 0 : node.exe , 1: file.js , 2: exchange_param (upbit,bithumb,binance)
     switch(process.argv[2]){
       case EXCHANGE_BINANCE:
+      case EXCHANGE_BINANCE_USDM:
+      case EXCHANGE_GATEIO:
         
         USD2KRW = await getUSD();
-
         if(USD2KRW == null){
           console.log("latest USD2KRW init Fail");
           return;
@@ -1454,12 +1580,13 @@ async function getConditions() {
       case EXCHANGE_BITHUMB:
         exchange = process.argv[2];
 
-        let {collection_time , filter_market , event_volume , event_log_save_timeout} = getExchangeConfig(exchange);
+        let {collection_time , filter_market , event_volume , event_log_save_timeout , exclude_symbols} = getExchangeConfig(exchange);
 
         collection_time_ = collection_time;
         filter_market_=  filter_market;
         event_volume_ = event_volume * 10000000;
         event_log_save_timeout_ = event_log_save_timeout;
+        exclude_symbols_ = exclude_symbols;
 
         // switch(exchange){
         //   case EXCHANGE_UPBIT:
@@ -1471,9 +1598,15 @@ async function getConditions() {
         //   case EXCHANGE_BINANCE:
         //     await initMarketInfo(binanceExchange ,['USDT'], bucket)
         //     break;
+        //   case EXCHANGE_BINANCE_USDM:
+        //     await initMarketInfo(binanceusdmExchange ,['USDT'], bucket)
+        //     break;
+        //   case EXCHANGE_GATEIO:
+        //     await initMarketInfo(gateioExchange ,['USDT'], bucket)
+        //     break;
         // }
 
-        //connectWebsocket(exchange ,bucket);
+        // connectWebsocket(exchange ,bucket);
         
         initUI();
         startVolumeRanker().catch((error) => console.error(error));
