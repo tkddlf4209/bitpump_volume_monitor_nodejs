@@ -13,6 +13,7 @@
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
     "ccxt": "^4.0.11",
+    "cheerio": "^1.0.0-rc.12",
     "colors": "^1.4.0",
     "moment": "^2.29.4",
     "moment-timezone": "^0.5.43",
