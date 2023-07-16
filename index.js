@@ -772,11 +772,11 @@ function connectWebsocket(exchange, bucket){
   });
 
   ws.addEventListener('close', (e) => {
-    console.log('WebSocket connection closed >> ',e);
+    //console.log('WebSocket connection closed >> ',e);
   });
 
   ws.addEventListener('error', (e) => {
-    console.log('WebSocket connection Error',e.message);
+    //console.log('WebSocket connection Error',e.message);
   });
 }
 

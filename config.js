@@ -22,9 +22,9 @@ module.exports = {
       collection_time : 60, 
       // 전체마켓(1) , KRW 마켓(2), BTC 마켓(3)
       filter_market : 1,
-      event_volume : 3,
+      event_volume : 2,
       event_log_save_timeout : 5,
-      exclude_symbols : []
+      exclude_symbols : ["BTT"]
     },
 
     binance : {
